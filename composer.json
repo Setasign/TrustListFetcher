@@ -1,0 +1,23 @@
+{
+    "name": "setasign/trust-list-fetcher",
+    "type": "library",
+    "require": {
+        "ext-dom": "*",
+        "ext-openssl": "*",
+        "setasign/setapdf-signer": "^2.51.0.2285",
+        "guzzlehttp/guzzle": "^7.0",
+        "phpseclib/phpseclib": "^3.0.51"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Setasign\\TrustListFetcher\\": "src/"
+        }
+    },
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://www.setasign.com/downloads/"
+        }
+    ]
+}
