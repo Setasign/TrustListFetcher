@@ -1,14 +1,20 @@
 <?php
 
-namespace Setasign\TrustListFetcher\Xades;
+namespace setasign\TrustListFetcher\Xades;
 
 use phpseclib3\Crypt\EC\PublicKey as EcPublicKey;
 use phpseclib3\File\X509;
+use setasign\SetaPDF2\Signer\Asn1\Exception;
 use setasign\SetaPDF2\Signer\X509\Certificate;
 
 class Verifier
 {
-    public function verifyDomDocument(\DomDocument $dom): array|false
+    /**
+     * @param \DomDocument $dom
+     * @return array{0: Certificate, 1: \DateTimeImmutable}
+     * @throws Exception
+     */
+    public function verifyDomDocument(\DomDocument $dom): array
     {
         $dsNs = "http://www.w3.org/2000/09/xmldsig#";
         $xadesNs = "http://uri.etsi.org/01903/v1.3.2#";
@@ -31,18 +37,18 @@ class Verifier
         $signature = $xpath->query('//ds:Signature')->item(0);
         $signedInfo = $xpath->query('ds:SignedInfo', $signature)->item(0);
         if (!$signedInfo instanceof \DOMElement) {
-            throw new \Exception('XML does not include a signature.');
+            throw new Exception('XML does not include a signature.');
         }
 
         $canonicalizationMethod = $xpath->query('ds:CanonicalizationMethod/@Algorithm', $signedInfo)
             ->item(0)?->nodeValue;
         if ($canonicalizationMethod !== 'http://www.w3.org/2001/10/xml-exc-c14n#') {
-            throw new \Exception("CanonicalizationMethod {$canonicalizationMethod} is currently not supported.");
+            throw new Exception("CanonicalizationMethod {$canonicalizationMethod} is currently not supported.");
         }
 
         $references = $xpath->query('ds:Reference', $signedInfo);
         if ($references->count() === 0) {
-            throw new \Exception("Cannot find 'Reference' nodes.");
+            throw new Exception("Cannot find 'Reference' nodes.");
         }
 
         foreach ($references as $reference) {
@@ -55,7 +61,7 @@ class Verifier
 
             $digestMethod = $xpath->query('ds:DigestMethod/@Algorithm', $reference)->item(0)?->value;
             if (!isset($knownAlgorithms[$digestMethod])) {
-                throw new \Exception("Unsupported digest hash method {$digestMethod}!");
+                throw new Exception("Unsupported digest hash method {$digestMethod}!");
             }
 
             $digestValue = $xpath->query('ds:DigestValue', $reference)->item(0)?->nodeValue;
@@ -72,7 +78,7 @@ class Verifier
                 $digestSubjectNode = $xpath->query("//*[@Id='$targetId']")->item(0);
 
             } else {
-                throw new \Exception('Unsupported target in Reference node.');
+                throw new Exception('Unsupported target in Reference node.');
             }
 
             $digestSubject = null;
@@ -80,7 +86,6 @@ class Verifier
             foreach ($transforms as $transform) {
                 if ($transform === 'http://www.w3.org/2000/09/xmldsig#enveloped-signature') {
                     $digestSubjectNode->removeChild(
-                        // TODO: refactor to $xpath->query()
                         $digestSubjectNode->getElementsByTagNameNS($dsNs, 'Signature')->item(0)
                     );
                     continue;
@@ -97,16 +102,16 @@ class Verifier
 //                    continue;
 //                }
 
-                throw new \Exception("Unsupported transform algorithm ({$transform}).");
+                throw new Exception("Unsupported transform algorithm ({$transform}).");
             }
 
             if ($digestSubject === null) {
-                throw new \Exception('No canonicalization transform happened.');
+                throw new Exception('No canonicalization transform happened.');
             }
 
             $calculatedDigest = hash($knownAlgorithms[$digestMethod], $digestSubject, true);
             if (\base64_decode($digestValue) !== $calculatedDigest) {
-                throw new \Exception("Invalid digest in Reference with URI '{$target}'!");
+                throw new Exception("Invalid digest in Reference with URI '{$target}'!");
             }
         }
 
@@ -115,7 +120,7 @@ class Verifier
         );
 
         if (!$certContent) {
-            throw new \Exception("Missing 'X509Certificate' node in signature");
+            throw new Exception("Missing 'X509Certificate' node in signature");
         }
 
         $x509 = new X509();
@@ -126,7 +131,7 @@ class Verifier
         $signatureMethod = $xpath->query('ds:SignatureMethod/@Algorithm', $signedInfo)->item(0)?->nodeValue;
 
         if (!isset($knownAlgorithms[$signatureMethod])) {
-            throw new \Exception("Unsupported signature algorithm {$signatureMethod}!!");
+            throw new Exception("Unsupported signature algorithm {$signatureMethod}!!");
         }
 
         $publicKey = $x509->getPublicKey();
@@ -140,11 +145,10 @@ class Verifier
         }
 
         if (!$publicKey->verify($subject, $signatureValue)) {
-            return false;
+            throw new Exception('Verification of XADES signature failed!');
         }
 
-        // TODO: refactor to $xpath->query()
-        $signTime = $dom->getElementsByTagNameNS($xadesNs, 'SigningTime')->item(0)->nodeValue;
+        $signTime = $signature->getElementsByTagNameNS($xadesNs, 'SigningTime')->item(0)->nodeValue;
         return [
             new Certificate($certContent),
             \DateTimeImmutable::createFromFormat('Y-m-d\TH:i:sp', $signTime)

@@ -1,20 +1,25 @@
 <?php
 
-namespace Setasign\TrustListFetcher;
+namespace setasign\TrustListFetcher;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
+use setasign\SetaPDF2\Signer\ValidationRelatedInfo\Logger;
+use setasign\SetaPDF2\Signer\ValidationRelatedInfo\LoggerInterface;
 use setasign\SetaPDF2\Signer\X509\Certificate;
 use setasign\SetaPDF2\Signer\X509\Collection;
-use Setasign\TrustListFetcher\Xades\Verifier;
+use setasign\TrustListFetcher\Xades\Verifier;
 
 class Eutl
 {
-    protected $lotlUrl;
+    protected string $lotlUrl;
     protected Client $client;
     protected Collection $trustedCertificates;
 
-    protected $urlsToProcess = [];
-    protected $processedUrls = [];
+    protected array $urlsToProcess = [];
+    protected array $processedUrls = [];
+
+    protected LoggerInterface $logger;
 
     public function __construct(
         string $lotlUrl,
@@ -26,47 +31,95 @@ class Eutl
         $this->trustedCertificates = $trustedCertificates;
     }
 
-    public function fetch(callable $certificateFound)
+    public function setLogger(LoggerInterface $logger)
+    {
+        $this->logger = $logger;
+    }
+
+    public function getLogger(): LoggerInterface
+    {
+        if (!isset($this->logger)) {
+            $this->logger = new Logger();
+        }
+
+        return $this->logger;
+    }
+
+    /**
+     * @param callable(Certificate $certificate, \DOMElement $x509CertificateNode): void $certificateFound
+     * @param callable(\InvalidArgumentException $exception, string $certificate, \DOMElement $x509CertificateNode): void $certificateError
+     * @return void
+     * @throws Exception
+     * @throws \setasign\SetaPDF2\Signer\Asn1\Exception
+     */
+    public function fetch(callable $certificateFound, callable $certificateError)
     {
         $this->urlsToProcess[] = $this->lotlUrl;
 
         while (($currentUrl = array_pop($this->urlsToProcess)) !== null) {
-            $this->processUrl($currentUrl, $certificateFound);
+            $this->processUrl($currentUrl, $certificateFound, $certificateError);
             $this->processedUrls[] = $currentUrl;
         }
     }
 
-    protected function processUrl($url, callable $certificateFound)
+    /**
+     * @param string $url
+     * @param callable(Certificate $certificate, \DOMElement $x509CertificateNode): void $certificateFound
+     * @param callable(\InvalidArgumentException $exception, string $certificate, \DOMElement $x509CertificateNode): void $certificateError
+     * @return void
+     * @throws Exception
+     * @throws \setasign\SetaPDF2\Signer\Asn1\Exception
+     */
+    protected function processUrl(string $url, callable $certificateFound, callable $certificateError): void
     {
-        echo "Processing $url\n";
+        $logger = $this->getLogger();
+        $logger->log('Processing trust list at: ' . $url)
+            ->increaseDepth();
 
-        $res = $this->client->request('GET', $url);
-        if ($res->getStatusCode() !== 200) {
-            throw new \Exception('Unable to process URL: ' . $url);
+        try {
+            $res = $this->client->request('GET', $url);
+        } catch (GuzzleException $e) {
+            $message = 'Unable to process URL: ' . $url . ': ' . $e->getMessage();
+            $logger->log($message)->decreaseDepth();
+            throw new Exception($message, 0, $e);
         }
 
         // TODO: Change to Guzzle/Async to allow processing of lists in parallel
 
         $xml = $res->getBody();
         $dom = new \DOMDocument();
-        $dom->loadXML($xml);
-
-        $verifier = new Verifier();
-        $verified = $verifier->verifyDomDocument($dom);
-        if ($verified === false) {
-            throw new \Exception('Verification failed for: ' . $url);
+        try {
+            $dom->loadXML($xml);
+        } catch (\Throwable $e) {
+            $message = 'Returned XML could not be parsed (' . $e->getMessage() . ').';
+            $logger->log($message)->decreaseDepth();
+            throw new Exception($message, 0, $e);
         }
-        echo "verification successful\n";
+
+        try {
+            $verified = (new Verifier())->verifyDomDocument($dom);
+        } catch (\Throwable $e) {
+            $message = 'XADES signature verification failed for trust list at ' . $url;
+            $logger->log($message)->decreaseDepth();
+            throw new Exception($message, 0, $e);
+        }
+
+        $logger->log('XADES signature verification successfully.');
 
         /** @var Certificate $signingCertificate */
         [$signingCertificate] = $verified;
+        $this->getLogger()->log('Signing certificate is: '. $signingCertificate->getSubjectName());
         if (!$this->trustedCertificates->contains($signingCertificate)) {
-            throw new \Exception(\sprintf(
+            $message = \sprintf(
                 'Signing certificate (%s) of %s is not found in the trusted certificates store.',
                 $signingCertificate->getSubjectName(),
                 $url
-            ));
+            );
+            $logger->log($message)->decreaseDepth();
+            throw new Exception($message);
         }
+
+        $logger->log('Signing certificate is found in the trusted certificates store.');
 
         $xpath = new \DOMXPath($dom);
         $xpath->registerNamespace('tl', 'http://uri.etsi.org/02231/v2#');
@@ -83,40 +136,78 @@ class Eutl
                 && $mimeType === 'application/vnd.etsi.tsl+xml'
                 && !in_array($tsLocation, $this->processedUrls, true)
             ) {
+                $logger->log('Found pointer to another trust list at: ' . $tsLocation . ' (stored for further processing)');
                 $this->urlsToProcess[] = $tsLocation;
             }
 
             $certificates = $pointer->getElementsByTagName('X509Certificate');
+            if ($certificates->length > 0) {
+                $logger
+                    ->log(\sprintf('Found %d signing certificates for referenced trust lists.', $certificates->length))
+                    ->increaseDepth();
+            }
             foreach ($certificates as $certificateNode) {
                 $certificate = new Certificate($certificateNode->textContent);
                 $this->trustedCertificates->add($certificate);
+                $logger->log(\sprintf(
+                    'Added certificate to trusted certificates store: %s (SHA1: %s)',
+                    $certificate->getSubjectName(),
+                    $certificate->getDigest()
+                ));
+            }
+
+            if ($certificates->length > 0) {
+                $logger->decreaseDepth();
             }
 
             $pointer = $pointer->nextElementSibling;
         }
 
-        $tspServices = $xpath->query('//tl:TrustServiceStatusList/tl:TrustServiceProviderList/tl:TrustServiceProvider/tl:TSPServices/tl:TSPService');
+        $tspServices = $xpath->query(
+            '//tl:TrustServiceStatusList/tl:TrustServiceProviderList/tl:TrustServiceProvider/tl:TSPServices/tl:TSPService'
+        );
         foreach ($tspServices as $tspServiceNode) {
-            $serviceInformation = $xpath->query('tl:ServiceInformation', $tspServiceNode)->item(0);
-            $x509Certificate = $xpath->query('tl:ServiceDigitalIdentity/tl:DigitalId/tl:X509Certificate', $serviceInformation)->item(0)?->nodeValue;
-            if (!$x509Certificate) {
-                continue;
-            }
+            $this->handleTspServiceNode($tspServiceNode, $certificateFound, $certificateError);
+        }
 
-            $serviceName = $xpath->query('tl:ServiceName/tl:Name[@xml:lang="en"]', $serviceInformation)->item(0)?->nodeValue;
-            $serviceStatus = $xpath->query('tl:ServiceStatus', $serviceInformation)->item(0)?->nodeValue;
-            $serviceTypeIdentifier = $xpath->query('tl:ServiceTypeIdentifier', $serviceInformation)->item(0)?->nodeValue;
+        $this->getLogger()->decreaseDepth();
+    }
 
+    /**
+     * @param \DOMElement $tspServiceNode
+     * @param callable(Certificate $certificate, \DOMElement $x509CertificateNode): void $certificateFound
+     * @param callable(\InvalidArgumentException $exception, string $certificate, \DOMElement $x509CertificateNode): void $certificateError
+     * @return void
+     * @throws \setasign\SetaPDF2\Signer\Asn1\Exception
+     */
+    protected function handleTspServiceNode(
+        \DOMElement $tspServiceNode,
+        callable $certificateFound,
+        callable $certificateError
+    ): void {
+        $xpath = new \DOMXPath($tspServiceNode->ownerDocument);
+        $xpath->registerNamespace('tl', 'http://uri.etsi.org/02231/v2#');
+
+        $x509Certificates = $xpath->query(
+            'tl:ServiceInformation/tl:ServiceDigitalIdentity/tl:DigitalId/tl:X509Certificate',
+            $tspServiceNode
+        );
+
+        foreach ($x509Certificates as $x509Certificate) {
             try {
-                $x509Certificate = strtr($x509Certificate, " \n\r", '');
-                $certificate = new Certificate($x509Certificate);
+                $certificate = new Certificate($x509Certificate->nodeValue);
 
-                // TODO: Define what information should be forwarded and put the into an object.
-                $certificateFound($certificate, $serviceName, $serviceStatus, $serviceTypeIdentifier);
+                $this->getLogger()->log(\sprintf(
+                    'Found certificate in trust list: %s (SHA1: %s)',
+                    $certificate->getSubjectName(),
+                    $certificate->getDigest()
+                ));
+
+                $certificateFound($certificate, $x509Certificate);
 
             } catch (\InvalidArgumentException $e) {
-                var_dump($e->getMessage());
-                var_dump($x509Certificate);
+                $this->getLogger()->log('Found certificate but it could not be processed into a Certificate instance!');
+                $certificateError($e, $x509Certificate->nodeValue, $x509Certificate);
             }
         }
     }

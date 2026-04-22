@@ -2,6 +2,7 @@
     "name": "setasign/trust-list-fetcher",
     "type": "library",
     "require": {
+        "php": "^8.4",
         "ext-dom": "*",
         "ext-openssl": "*",
         "setasign/setapdf-signer": "^2.51.0.2285",
@@ -11,7 +12,7 @@
     "license": "MIT",
     "autoload": {
         "psr-4": {
-            "Setasign\\TrustListFetcher\\": "src/"
+            "setasign\\TrustListFetcher\\": "src/"
         }
     },
     "repositories": [
