@@ -22,9 +22,9 @@ class Eutl
     protected LoggerInterface $logger;
 
     public function __construct(
-        string $lotlUrl,
         Client $client,
-        Collection $trustedCertificates
+        Collection $trustedCertificates,
+        string $lotlUrl = 'https://ec.europa.eu/tools/lotl/eu-lotl.xml'
     ) {
         $this->lotlUrl = $lotlUrl;
         $this->client = $client;
