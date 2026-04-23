@@ -10,14 +10,15 @@ You can install the package with [Composer](https://getcomposer.org/):
 composer require setasign/trust-list-fetcher
 ```
 
-The package makes use of classes of the [SetaPDF-Signer](https://www.setasign.com/products/setapdf-signer/) component.
-A valid license and the correct composer repository has to be setup in your composer.json, too.
+The package uses classes of the [SetaPDF-Signer](https://www.setasign.com/products/setapdf-signer/) component.
+A valid license and the correct [composer repository](https://manuals.setasign.com/setapdf-core-manual/installation/#index-2) 
+has to be setup in your composer.json, too.
 
 The root namespace for all classes is `setasign/TrustListFetcher`.
 
 ## HTTP requests
 All internal HTTP requests are done by a `Client` instance of [`Guzzle`](https://docs.guzzlephp.org/en/stable/)
-which has to be injected in the constructor method of the respective trust list class.
+which is expected as an argument for the respective trust list class.
 
 ```php
 $client = new GuzzleHttp\Client([
