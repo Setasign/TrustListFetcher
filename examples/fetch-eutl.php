@@ -8,8 +8,6 @@ use setasign\TrustListFetcher\Eutl;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-$url = 'https://ec.europa.eu/tools/lotl/eu-lotl.xml';
-
 $trustedCerts = new Collection();
 $trustedCerts->add(PemHelper::extractFromFile(__DIR__ . '/../assets/LOTL-signing-certificates-2026-04-15.pem'));
 
@@ -19,10 +17,8 @@ $client = new Client([
 
 $start = microtime(true);
 
-$eutlFetcher = new Eutl($url, $client, $trustedCerts);
-$logger = new \setasign\SetaPDF2\Signer\ValidationRelatedInfo\Logger();
-$logger->setDirectOutput(true);
-$eutlFetcher->setLogger($logger);
+$eutlFetcher = new Eutl($client, $trustedCerts);
+$eutlFetcher->getLogger()->setDirectOutput(true);
 
 $passed = $faulty = 0;
 try {
