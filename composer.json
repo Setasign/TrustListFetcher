@@ -1,5 +1,6 @@
 {
     "name": "setasign/trust-list-fetcher",
+    "description": "A PHP package that allows you to download or extract all certificates from trust lists such as the EUTL or AATL.",
     "type": "library",
     "require": {
         "php": "^8.4",
