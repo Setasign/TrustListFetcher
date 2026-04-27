@@ -1,4 +1,4 @@
-# TrustListFetcher (WIP)
+# TrustListFetcher
 A PHP package licensed under the [MIT](LICENSE) that allows you to download or extract all certificates
 from trust lists such as the [EUTL](https://eidas.ec.europa.eu/efda/trust-services/browse/eidas/tls) or AATL.
 
@@ -126,4 +126,86 @@ try {
 
 ## Certificates from the AATL
 
-TODO: Actually there's no `Aatl` fetcher class implemented.
+The `Aatl` class allows you to download all certificates from the AATL.
+
+The integrity and timestamp signature of the PDF envelope are validated by
+a root certificate for Adobe ([Adobe Root CA G2.cer](/assets/Adobe%20Root%20CA%20G2.cer)) 
+and DigiCert ([DigiCert Trusted Root G4.cer](/assets/DigiCert%20Trusted%20Root%20G4.cer)).
+For this we need a trusted certificate collection:
+
+```php
+//...
+use setasign\SetaPDF2\Signer\X509\Collection;
+//...
+
+$trustedCerts = new Collection();
+$trustedCerts->addFromFile(__DIR__ . '/../assets/Adobe Root CA G2.cer');
+$trustedCerts->addFromFile(__DIR__ . '/../assets/DigiCert Trusted Root G4.cer');
+```
+
+Then you can simply initiate an instance:
+
+```php
+//...
+use setasign\TrustListFetcher\Aatl;
+//...
+
+$aatlFetcher = new Aatl($client, $trustedCerts);
+```
+
+...and call the `fetch()` method to get all certificates from the AATL:
+
+```php
+//...
+use setasign\SetaPDF2\Signer\X509\Certificate;
+//...
+
+$aatlFetcher->fetch(
+    function (Certificate $certificate) {
+        // a certificate was successfully extract
+    },
+    function (\InvalidArgumentException $e, string $certificate) {
+        // the resolved certificate could not be converted to a Certificate instance 
+    }
+);
+```
+
+### Error Handling and Logging
+Only if the `fetch()` call is executed without any thrown exception, the process
+can be seen as complete.
+
+As the `Eutl` instance, the `Aatl` instance also allows you to access a logger instance
+by its `getLogger()` method.
+
+You can enable direct output of the logger instance this way:
+
+```php
+$aatlFetcher->getLogger()->setDirectOutput(true);
+```
+
+All logs will be echoed out directly.
+
+If you only want to access the log in case of an exception, just access it in a catch-block:
+
+```php
+try {
+    $aatlFetcher->fetch(
+        function (Certificate $certificate) {
+            // ...
+        },
+        function (\InvalidArgumentException $e, string $certificate) {
+            // ... 
+        }
+    );
+   
+    // commit all resolved certificates
+    
+} catch (\Throwable $e) {
+    // revert or simply not process all resolved certificates
+    
+    echo 'Error: ' . $e->getMessage() . PHP_EOL;
+    foreach ($eutlFetcher->getLogger()->getLogs() as $logEntry) {
+        echo \str_repeat(' ', $log->getDepth() * 4) . $log->getMessage() . PHP_EOL;
+    }
+}
+```
