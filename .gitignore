@@ -1,2 +1,4 @@
 auth.json
 /vendor/
+/assets/*.pdf
+/assets/*.xml
