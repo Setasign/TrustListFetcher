@@ -1,6 +1,8 @@
 # TrustListFetcher
 A PHP package licensed under the [MIT](LICENSE) that allows you to download or extract all certificates
-from trust lists such as the [EUTL](https://eidas.ec.europa.eu/efda/trust-services/browse/eidas/tls) or AATL.
+from trust lists such as the [EUTL](https://eidas.ec.europa.eu/efda/trust-services/browse/eidas/tls), 
+[Swiss Trust List](https://uri.tsl-switzerland.ch/TrstSvc/TrustedList/schemerules/CH/) (same format as the EUTL)
+or AATL.
 
 ## Installation
 
