@@ -10,7 +10,12 @@ use setasign\SetaPDF2\Signer\X509\Certificate;
 use setasign\SetaPDF2\Signer\X509\Collection;
 use setasign\TrustListFetcher\Xades\Verifier;
 
-class Eutl
+/**
+ * Class for accessing and parsing trust lists conforming to ETSI TS 119 612
+ *
+ * @link https://www.etsi.org/deliver/etsi_ts/119600_119699/119612/02.04.01_60/ts_119612v020401p.pdf
+ */
+class EtsiTL
 {
     protected string $lotlUrl;
     protected Client $client;
@@ -24,7 +29,7 @@ class Eutl
     public function __construct(
         Client $client,
         Collection $trustedCertificates,
-        string $lotlUrl = 'https://ec.europa.eu/tools/lotl/eu-lotl.xml'
+        string $lotlUrl
     ) {
         $this->lotlUrl = $lotlUrl;
         $this->client = $client;

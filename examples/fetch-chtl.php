@@ -4,7 +4,7 @@ use GuzzleHttp\Client;
 use setasign\SetaPDF2\Signer\PemHelper;
 use setasign\SetaPDF2\Signer\X509\Certificate;
 use setasign\SetaPDF2\Signer\X509\Collection;
-use setasign\TrustListFetcher\Eutl;
+use setasign\TrustListFetcher\EtsiTL;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -19,7 +19,7 @@ $client = new Client([
 $start = microtime(true);
 
 // Switzerland uses the same format as the EU
-$chtlFetcher = new Eutl($client, $trustedCerts, 'https://trustedlist.tsl-switzerland.ch/tsl-ch.xml');
+$chtlFetcher = new EtsiTL($client, $trustedCerts, 'https://trustedlist.tsl-switzerland.ch/tsl-ch.xml');
 $chtlFetcher->getLogger()->setDirectOutput(true);
 
 $passed = $faulty = 0;

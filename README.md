@@ -30,7 +30,8 @@ $client = new GuzzleHttp\Client([
 
 ## Certificates from the EUTL
 
-The `Eutl` class allows you to download all certificates from the [EUTL](https://eidas.ec.europa.eu/efda/trust-services/browse/eidas/tls/tl/EU).
+The `EtsiTL` class allows you to download all certificates from the [EUTL](https://eidas.ec.europa.eu/efda/trust-services/browse/eidas/tls/tl/EU) or trust lists from countries or
+international organizations adopted the same format (defined in ETSI TS 119 612).
 
 Based on the [Official Journal of the European Union (OJEU) on 14 April 2026](https://eur-lex.europa.eu/legal-content/EN/TXT/PDF/?uri=OJ:C_202601944) the class
 starts to load the "List Of Trust Lists" (LOTL) from https://ec.europa.eu/tools/lotl/eu-lotl.xml and recursively accesses
@@ -56,10 +57,10 @@ Then you can simply initiate an instance:
 
 ```php
 //...
-use setasign\TrustListFetcher\Eutl;
+use setasign\TrustListFetcher\EtsiTL;
 //...
 
-$eutlFetcher = new Eutl($client, $trustedCerts);
+$eutlFetcher = new EtsiTL($client, $trustedCerts, 'https://ec.europa.eu/tools/lotl/eu-lotl.xml');
 ```
 The real process starts by calling the `fetch()` method, which accepts two callbacks:
 `$certificateFound` which is executed if a certificate is found and `$certificateError`
